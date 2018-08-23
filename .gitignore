@@ -1,0 +1,6 @@
+# Ignorar todo
+*
+
+# Excepto...
+!.gitignore
+!*.rkt
