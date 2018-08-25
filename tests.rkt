@@ -49,6 +49,13 @@
                        (define o (new c))]
                       (send o set-x 2))) "method not found")
 (test (run-val '(local
+                      [(define c (class
+                                     (field x 1)
+                                   (method sum (y) (+ (get this x) y))
+                                   (method sum2 (a b) (+ (get this x) (+ a b)))))
+                       (define o (new c))]
+                      (send o sum2 3 4))) 8)
+(test (run-val '(local
                   [(define c (class
                                  (field x 1)
                                (field y 2)
