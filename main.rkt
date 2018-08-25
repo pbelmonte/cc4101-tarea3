@@ -21,8 +21,8 @@
 
 ;EXTENSION PARA CLASE Y OBJETOS
 <expr>  ::= ... (todo lo anterior)        
-         | (class <expr> <member> ...)
-         | (class <expr> <: <expr> <member> ...)
+         | (class <member> ...)
+         | (class <: <expr> <member> ...)
          | (new <expr>)
          | this
          | (super id <expr> ...)
@@ -44,7 +44,17 @@
   (unop f s)
   (my-if c tb fb)  
   (seqn expr1 expr2)  
-  (lcal defs body))
+  (lcal defs body)
+  (clss membrs)
+  (new cl)
+  (get obj fld)
+  (set obj fld val)
+  (send obj mtd args)
+  (this))
+
+(deftype Member
+  (fld name expr)
+  (mtd name args expr))
 
 ;; values
 (deftype Val
@@ -115,6 +125,7 @@ Este método no crea un nuevo ambiente.
 ;; parse :: s-expr -> Expr
 (define (parse s-expr)
   (match s-expr
+    ['this (this)]
     [(? number?) (num s-expr)]
     [(? symbol?) (id s-expr)]    
     [(? boolean?) (bool s-expr)]
@@ -132,6 +143,13 @@ Este método no crea un nuevo ambiente.
     [(list 'seqn e1 e2) (seqn (parse e1) (parse e2))]    
     [(list 'local (list e ...)  b)
      (lcal (map parse-def e) (parse b))]
+    [(list 'class members ...) (clss (map parse members))]
+    [(list 'field i e) (fld (parse i) (parse e))]
+    [(list 'method i (list args ...) e) (mtd (parse i) (map parse args) (parse e))]
+    [(list 'get obj fld) (get (parse obj) fld)]
+    [(list 'set obj fld val) (set (parse obj) fld (parse val))]
+    [(list 'new cl) (new (parse cl))]
+    [(list 'send obj mtd args ...) (send (parse obj) mtd args)]
     ))
 
 
