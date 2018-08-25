@@ -47,14 +47,16 @@
   (lcal defs body)
   (clss membrs)
   (new cl)
-  (get obj fld)
-  (set obj fld val)
-  (send obj mtd args)
+  (get o fld)
+  (set o fld val)
+  (send o mtd args)
   (this))
 
 (deftype Member
   (fld name expr)
   (mtd name args expr))
+
+(define-struct obj (class values))
 
 ;; values
 (deftype Val
@@ -146,10 +148,10 @@ Este método no crea un nuevo ambiente.
     [(list 'class members ...) (clss (map parse members))]
     [(list 'field i e) (fld (parse i) (parse e))]
     [(list 'method i (list args ...) e) (mtd (parse i) (map parse args) (parse e))]
-    [(list 'get obj fld) (get (parse obj) fld)]
-    [(list 'set obj fld val) (set (parse obj) fld (parse val))]
+    [(list 'get o fld) (get (parse o) fld)]
+    [(list 'set o fld val) (set (parse o) fld (parse val))]
     [(list 'new cl) (new (parse cl))]
-    [(list 'send obj mtd args ...) (send (parse obj) mtd args)]
+    [(list 'send o mtd args ...) (send (parse o) mtd args)]
     ))
 
 
@@ -181,8 +183,41 @@ Este método no crea un nuevo ambiente.
                    (let ([in-def (interp-def x new-env)])
                      (extend-frame-env! (car in-def) (cdr in-def) new-env)
                      #t)) defs)       
-       (interp body new-env))     
-     ]))
+       (interp body new-env))]
+    [(clss members)
+     (def (list flds mtds) (interp-members members '() '()))
+     (let ([methods mtds])
+       (letrec
+           ([class
+                (λ (msg . vals)
+                  (case msg
+                    [(create)
+                     (make-obj class
+                               (make-hash flds))]
+                    [(read)
+                     (dict-ref (obj-values (first vals)) (id (second vals)))]
+                    [(write)
+                     (dict-set! (obj-values (first vals)) (id (second vals)) (third vals))]
+                    [(invoke)
+                     (if (assoc (second vals) methods)
+                         (apply ((cdr (assoc (second vals) methods)) (first vals)) (cddr vals))
+                         (error "method not found"))]))])
+         class))]
+    [(new cl) ((interp cl env) 'create)]
+    [(get o fld) (interp (let ([obj (interp o env)])
+                           ((obj-class obj) 'read obj fld)) env)]
+    [(set o fld val) (let ([obj (interp o env)])
+                       ((obj-class obj) 'write obj fld val))]))
+
+(define (interp-members member-list flds mtds)
+  (match member-list
+    [(list (fld i e) tail ...) (interp-members tail
+                                               (append flds (list (cons i e)))
+                                               mtds)]
+    [(list (mtd i args e) tail ...) (interp-members tail
+                                                    flds
+                                                    (append mtds (list (cons i (λ (self) (λ args e))))))]
+    ['() (list flds mtds)]))
 
 ;; open-val :: Val -> Scheme Value
 (define (open-val v)
