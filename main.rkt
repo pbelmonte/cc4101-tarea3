@@ -147,12 +147,11 @@ Este método no crea un nuevo ambiente.
      (lcal (map parse-def e) (parse b))]
     [(list 'class members ...) (clss (map parse members))]
     [(list 'field i e) (fld (parse i) (parse e))]
-    [(list 'method i (list args ...) e) (mtd (parse i) (map parse args) (parse e))]
+    [(list 'method i (list args ...) e) (mtd (parse i) args (parse e))]
     [(list 'get o fld) (get (parse o) fld)]
     [(list 'set o fld val) (set (parse o) fld (parse val))]
     [(list 'new cl) (new (parse cl))]
-    [(list 'send o mtd args ...) (send (parse o) mtd args)]
-    ))
+    [(list 'send o mtd args ...) (send (parse o) mtd (map parse args))]))
 
 
 ;; parse-def :: s-expr -> Def
@@ -195,20 +194,42 @@ Este método no crea un nuevo ambiente.
                      (make-obj class
                                (make-hash flds))]
                     [(read)
-                     (dict-ref (obj-values (first vals)) (id (second vals)))]
+                     (def result (dict-ref (obj-values (first vals)) (id (second vals)) #f))
+                     (if result
+                         result
+                         (error "field not found"))]
                     [(write)
-                     (dict-set! (obj-values (first vals)) (id (second vals)) (third vals))]
+                     (def exists (dict-ref (obj-values (first vals)) (id (second vals)) #f))
+                     (if exists
+                         (dict-set! (obj-values (first vals)) (id (second vals)) (third vals))
+                         (error "field not found"))]
                     [(invoke)
-                     (if (assoc (second vals) methods)
-                         (apply ((cdr (assoc (second vals) methods)) (first vals)) (cddr vals))
-                         (error "method not found"))]))])
+                     (begin
+                       (define (map-interp e)
+                         (interp e env))
+                     (def met (assoc (id (second vals)) methods))
+                     (if met
+                         (let ([new-env (multi-extend-env (cadr met) (map map-interp (first (cddr vals))) env)])
+                           (begin
+                             (extend-frame-env! 'this (first vals) new-env)
+                             (interp (apply (cddr (assoc (id (second vals)) methods)) (cddr vals)) new-env)))
+                         (error "method not found")))]))])
          class))]
     [(new cl) ((interp cl env) 'create)]
     [(get o fld) (interp (let ([obj (interp o env)])
                            ((obj-class obj) 'read obj fld)) env)]
     [(set o fld val) (let ([obj (interp o env)])
-                       ((obj-class obj) 'write obj fld val))]))
+                       ((obj-class obj) 'write obj fld (num (open-val (interp val env)))))]
+    [(send o mtd args) (let ([obj (interp o env)])
+                         ((obj-class obj) 'invoke obj mtd args))]
+    [(this) (interp (id 'this) env)]))
 
+#|
+interp-members :: List(Member) List(Pair) List(Pair) -> List(List)
+intérprete de members, toma una lista de members y dos listas de pares (inicialmente vacías)
+y genera una lista que contiene dos listas: flds y mtds las cuales contienen pares que son
+el resultado de interpretar cada fld y cada mtd
+|#
 (define (interp-members member-list flds mtds)
   (match member-list
     [(list (fld i e) tail ...) (interp-members tail
@@ -216,22 +237,20 @@ Este método no crea un nuevo ambiente.
                                                mtds)]
     [(list (mtd i args e) tail ...) (interp-members tail
                                                     flds
-                                                    (append mtds (list (cons i (λ (self) (λ args e))))))]
+                                                    (append mtds (list (cons i (cons args (λ args e))))))]
     ['() (list flds mtds)]))
 
 ;; open-val :: Val -> Scheme Value
 (define (open-val v)
   (match v
     [(numV n) n]
-    [(boolV b) b]
-    ))
+    [(boolV b) b]))
 
 ;; make-val :: Scheme Value -> Val
 (define (make-val v)
   (match v
     [(? number?) (numV v)]
-    [(? boolean?) (boolV v)]
-    ))
+    [(? boolean?) (boolV v)]))
 
 ;; interp-def :: Def, Env -> Expr
 (define (interp-def a-def env)
