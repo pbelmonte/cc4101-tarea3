@@ -29,32 +29,78 @@
                                      (field x 1)
                                    (method sum (y) (+ (get this x) y))))
                        (define o (new c))]
-                      (get o x))) 1)
+                      (get o x)))
+      1)
 (test/exn (run-val '(local
                       [(define c (class
                                      (field x 1)
                                    (method sum (y) (+ (get this x) y))))
                        (define o (new c))]
-                      (get o y))) "field not found")
+                      (get o y)))
+          "field not found")
 (test (run-val '(local
                       [(define c (class
                                      (field x 1)
                                    (method sum (y) (+ (get this x) y))))
                        (define o (new c))]
-                      (send o sum 3))) 4)
+                      (seqn
+                       (set o x 2)
+                       (get o x))))
+      2)
 (test/exn (run-val '(local
                       [(define c (class
                                      (field x 1)
                                    (method sum (y) (+ (get this x) y))))
                        (define o (new c))]
-                      (send o set-x 2))) "method not found")
+                      (set o y 2)))
+          "field not found")
+(test (run-val '(local
+                      [(define c (class
+                                     (field x 1)
+                                   (method sum (y) (+ (get this x) y))
+                                   (method set-x (val) (set this x val))))
+                       (define o (new c))]
+                      (seqn
+                       (send o set-x 2)
+                       (get o x))))
+      2)
+(test (run-val '(local
+                      [(define c (class
+                                     (field x 1)
+                                   (method sum (y) (+ (get this x) y))))
+                       (define o (new c))]
+                      (send o sum 3)))
+      4)
+(test (run-val '(local
+                      [(define c (class
+                                     (field x 1)
+                                   (method sum (y) (+ y y))
+                                   (method sum2 (a b) (+ a b))))
+                       (define o (new c))]
+                      (send o sum2 3 4)))
+      7)
+(test (run-val '(local
+                      [(define c (class
+                                     (field x 1)
+                                   (method sum (y) (+ y y))))
+                       (define o (new c))]
+                      (send o sum 3)))
+      6)
+(test/exn (run-val '(local
+                      [(define c (class
+                                     (field x 1)
+                                   (method sum (y) (+ (get this x) y))))
+                       (define o (new c))]
+                      (send o set-x 2)))
+          "method not found")
 (test (run-val '(local
                       [(define c (class
                                      (field x 1)
                                    (method sum (y) (+ (get this x) y))
                                    (method sum2 (a b) (+ (get this x) (+ a b)))))
                        (define o (new c))]
-                      (send o sum2 3 4))) 8)
+                      (send o sum2 3 4)))
+      8)
 (test (run-val '(local
                   [(define c (class
                                  (field x 1)
@@ -66,7 +112,6 @@
                    (send o set-x (+ 1 3))
                    (+ (send o sum 3) (get o y)))))
       11)
-
 (test (run-val '(local
                   [(define A
                      (class
